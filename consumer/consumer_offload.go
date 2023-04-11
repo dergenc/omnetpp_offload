@@ -24,6 +24,8 @@ func OffloadSimulation(ctx context.Context, bconfig gconfig.Broker, config *Conf
 		Port: bconfig.StargatePort,
 	})
 
+	log.Printf("OffloadSimulation: simulationId (%v)", bconfig.Address)
+
 	if config.Tag == "" {
 		config.Tag = filepath.Base(config.Path)
 	}

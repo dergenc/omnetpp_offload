@@ -17,7 +17,7 @@ network TicToc18
         int numCentralNodes = default(2);
     types:
         channel Channel extends ned.DelayChannel {
-            delay = 100ms;
+            delay = 5ms;
         }
     submodules:
         tic[numCentralNodes+4]: Txc18;

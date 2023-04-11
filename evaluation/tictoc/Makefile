@@ -2,7 +2,7 @@
 # OMNeT++/OMNEST Makefile for tictoc
 #
 # This file was generated with the command:
-#  opp_makemake -f --deep
+#  opp_makemake -f --deep -u Cmdenv -o tictoc
 #
 
 # Name of target to be created (-o option)
@@ -14,8 +14,8 @@ TARGET_IMPDEF = $(TARGET_NAME)$(IMPDEF_SUFFIX)
 TARGET_FILES = $(TARGET_DIR)/$(TARGET)
 
 # User interface (uncomment one) (-u option)
-USERIF_LIBS = $(ALL_ENV_LIBS) # that is, $(QTENV_LIBS) $(CMDENV_LIBS)
-#USERIF_LIBS = $(CMDENV_LIBS)
+#USERIF_LIBS = $(ALL_ENV_LIBS) # that is, $(QTENV_LIBS) $(CMDENV_LIBS)
+USERIF_LIBS = $(CMDENV_LIBS)
 #USERIF_LIBS = $(QTENV_LIBS)
 
 # C++ include paths (with -I)

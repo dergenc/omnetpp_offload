@@ -1,7 +1,0 @@
-{
-  "scenario-name": "raspberry",
-  "broker": "18.196.54.95",
-  "repeat": 3,
-  "connect": "local",
-  "simulation-path": "evaluation/tictoc"
-}

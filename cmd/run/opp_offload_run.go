@@ -18,6 +18,8 @@ var configPath string
 var timeout time.Duration
 var writeLog bool
 
+var offloadConfig gconfig.Config
+
 func init() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
@@ -26,6 +28,9 @@ func init() {
 	flag.DurationVar(&timeout, "timeout", time.Hour*3, "set timeout for execution")
 	flag.BoolVar(&writeLog, "wl", false, "write logs to .cache/evaluation")
 
+	flag.StringVar(&offloadConfig.Broker.Address, "broker", "0.0.0.0", "set broker address")
+	flag.IntVar(&offloadConfig.Broker.BrokerPort, "port", 8888, "set broker port")
+	flag.IntVar(&offloadConfig.Broker.StargatePort, "stargate", 8889, "set stargate port")
 	flag.Parse()
 }
 
@@ -35,7 +40,9 @@ func main() {
 		simple.WriteLogToFile("consumer", gconfig.CacheDir())
 	}
 
-	config := gconfig.ParseFlagsBroker()
+	// TODO: Another package cannot read command line arguments.
+	//config := gconfig.ParseFlagsBroker()
+	config := offloadConfig.Broker
 
 	path, err := filepath.Abs(path)
 	if err != nil {

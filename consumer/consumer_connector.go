@@ -8,9 +8,10 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	"log"
 	"sync"
+	"fmt"
 )
 
-func (sim *simulation) connect(prov *pb.ProviderInfo, once *sync.Once) {
+func (sim *simulation) connect(prov *pb.ProviderInfo, once *sync.Once) (err error){
 
 	//
 	// Phase 1: Connect to provider
@@ -19,7 +20,7 @@ func (sim *simulation) connect(prov *pb.ProviderInfo, once *sync.Once) {
 	pconn, err := pconnect(sim.ctx, prov, sim.config.Connect)
 	if err != nil {
 		log.Println(prov.ProviderId, err)
-		return
+		return 
 	}
 
 	// Start evaluation
@@ -57,6 +58,8 @@ func (sim *simulation) connect(prov *pb.ProviderInfo, once *sync.Once) {
 		log.Println(prov.ProviderId, err)
 		return
 	}
+
+	return
 }
 
 func (sim *simulation) startConnector(bconn *grpc.ClientConn) {
@@ -85,27 +88,27 @@ func (sim *simulation) startConnector(bconn *grpc.ClientConn) {
 
 			mux.RLock()
 			_, ok := connections[prov.ProviderId]
+			fmt.Println(prov.ProviderId)
+			fmt.Println(connections[prov.ProviderId])
 			mux.RUnlock()
 
-			if ok {
-
-				//
-				// Connection already established, nothing to do
-				//
-
-				continue
-			} else {
+			if !ok {
 				//
 				// Connect to provider
 				//
 
 				// TODO: Try to reconnect to the provider after fail
 
+				err = sim.connect(prov, &once)
+				if err != nil {
+					fmt.Println("cannot connect to the provider %v", prov.ProviderId)
+					connections[prov.ProviderId] = false
+					continue
+				}
+
 				mux.Lock()
 				connections[prov.ProviderId] = true
 				mux.Unlock()
-
-				go sim.connect(prov, &once)
 			}
 		}
 	}

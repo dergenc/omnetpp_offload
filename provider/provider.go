@@ -15,6 +15,7 @@ import (
 	"log"
 	"sync"
 	"time"
+	"fmt"
 )
 
 type simulationId = string
@@ -30,6 +31,77 @@ type provider struct {
 	executionTimes map[simulationId]time.Duration
 	newRecv        *sync.Cond
 	allocRecvs     map[simulationId]chan<- int
+}
+
+func TryDial(config gconfig.Config) (brokerConn grpc.ClientConnInterface, err error){
+	brokerConn, err = grpc.Dial(
+		config.Broker.BrokerDialAddr(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithReturnConnectionError(),
+		grpc.WithTimeout(2*time.Second),
+	)
+	return 
+}
+
+func StartServer(ctx context.Context, config gconfig.Config, prov *provider) { 
+
+	//
+	// Start stargate-gRPC servers.
+	//
+	
+	server := grpc.NewServer()
+	pb.RegisterProviderServer(server, prov)
+	pb.RegisterStorageServer(server, prov.store)
+	pb.RegisterEvaluationServer(server, &eval.Server{})
+
+	stargate.SetConfig(stargate.Config{
+		Addr: config.Broker.Address,
+		Port: config.Broker.StargatePort,
+	})
+
+	go stargrpc.ServeLocal(prov.providerId, server)
+	go stargrpc.ServeP2P(prov.providerId, server)
+	go stargrpc.ServeRelay(prov.providerId, server)
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			server.Stop()
+		}
+	}()
+
+}
+
+func Connect(ctx context.Context, config gconfig.Config, prov *provider) (stream pb.Broker_RegisterClient){
+
+	// Debug web server
+	// startWatchers(prov)
+
+	//
+	// Register provider
+	//
+
+	log.Printf("connect to broker %v", config.Broker.BrokerDialAddr())
+
+	brokerConn, err := TryDial(config)
+	if err != nil {
+		log.Printf("there might be an error with dialing, will try to reconnect")
+		return
+	}	
+
+	// TODO: Defer should be discussed later on to avoid unintended persistent connections.
+	//defer func() { _ = brokerConn.Close()}()
+
+	broker := pb.NewBrokerClient(brokerConn)
+	stream, err = broker.Register(ctx)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	_ = stream.Send(&pb.Ping{Cast: &pb.Ping_Register{Register: prov.info()}})
+	
+	return stream
 }
 
 func Start(ctx context.Context, config gconfig.Config) {
@@ -55,80 +127,38 @@ func Start(ctx context.Context, config gconfig.Config) {
 
 	prov.recoverSessions()
 
-	// Debug web server
-	// startWatchers(prov)
-
-	//
-	// Register provider
-	//
-
-	log.Printf("connect to broker %v", config.Broker.BrokerDialAddr())
-
-	brokerConn, err := grpc.Dial(
-		config.Broker.BrokerDialAddr(),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
-	)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	defer func() {
-		_ = brokerConn.Close()
-	}()
-
-	broker := pb.NewBrokerClient(brokerConn)
-	stream, err := broker.Register(ctx)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	err = stream.Send(&pb.Ping{Cast: &pb.Ping_Register{Register: prov.info()}})
-	if err != nil {
-		log.Fatalln(err)
-	}
+	stream := Connect(ctx, config, prov)
+	StartServer(ctx, config, prov)
 
 	go func() {
-		for range time.Tick(time.Millisecond * 500) {
 
+		isDisconnected := false
+
+		for range time.Tick(time.Millisecond * 1000) {
 			var util *pb.Utilization
-			util, err = sysinfo.GetUtilization(ctx)
+			util, err := sysinfo.GetUtilization(ctx)
 			if err != nil {
 				log.Fatalln(err)
 			}
 
-			//log.Printf("Start: send utilization %v", util.CpuUsage)
+			// NOTE: This is a workaround since current version of go-grpc cannot detect errors (EOF) on an active stream
+			_, err = TryDial(config)
+			if err != nil {
+				if !isDisconnected {
+					//server.GracefulStop()
+					isDisconnected = true
+				}
 
+				fmt.Println("connection lost, trying to reconnect to broker (%v)", prov.providerId)
+				continue
+			}
+			if isDisconnected {
+				stream = Connect(ctx, config, prov)
+				isDisconnected = false
+			}
+			log.Printf("Start: send utilization %v", util.CpuUsage)
 			err = stream.Send(&pb.Ping{Cast: &pb.Ping_Util{Util: util}})
-			if err != nil {
-				// TODO: reconnect after EOF
-				log.Fatalln(err)
-			}
-		}
-	}()
-
-	//
-	// Start stargate-gRPC servers.
-	//
-
-	server := grpc.NewServer()
-	pb.RegisterProviderServer(server, prov)
-	pb.RegisterStorageServer(server, prov.store)
-	pb.RegisterEvaluationServer(server, &eval.Server{})
-
-	stargate.SetConfig(stargate.Config{
-		Addr: config.Broker.Address,
-		Port: config.Broker.StargatePort,
-	})
-
-	go stargrpc.ServeLocal(prov.providerId, server)
-	go stargrpc.ServeP2P(prov.providerId, server)
-	go stargrpc.ServeRelay(prov.providerId, server)
-
-	go func() {
-		select {
-		case <-ctx.Done():
-			server.Stop()
+			fmt.Println(err)
 		}
 	}()
 
