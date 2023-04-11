@@ -1,8 +1,8 @@
 
-PROJECT_DIR = "/home/doganalp/Workspace/omnetpp_offload/"
-EVALUATION_DIR = "/home/doganalp/Workspace/omnetpp_offload/simulation-campaign/evaluation/"
+PROJECT_DIR = "-"
+EVALUATION_DIR = "-"
 
-GO_EVALUATION_DIR = "/home/doganalp/.cache/omnetpp-offload/evaluation/"
+GO_EVALUATION_DIR = "-"
 
 # does not affect if it is not local
 IS_DOCKER = True
